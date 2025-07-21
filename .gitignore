@@ -1,0 +1,11 @@
+/.venv
+
+.env
+
+database.db
+database2.db
+
+**/__pycache__/
+
+.idea/
+.vscode/

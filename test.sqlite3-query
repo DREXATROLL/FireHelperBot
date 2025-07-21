@@ -1,0 +1,68 @@
+-- database: ./database.db
+
+-- Скрипт для заполнения БД тестовыми данными (SQLite)
+-- ВЕРСИЯ с временным отключением Foreign Keys
+
+-- Отключаем проверку внешних ключей
+PRAGMA foreign_keys = OFF;
+
+BEGIN TRANSACTION; -- Начнем транзакцию здесь
+
+-- Очистка таблиц (порядок теперь не так важен, но оставим)
+DELETE FROM equipment_logs;
+DELETE FROM trip_sheets;
+DELETE FROM dispatch_orders;
+DELETE FROM equipment;
+DELETE FROM vehicles;
+DELETE FROM employees;
+-- Добавить очистку других таблиц при необходимости
+
+-- Блок удаления sqlite_sequence удален, так как он вызывал ошибку ранее
+
+-- 1. Сотрудники (Employees)
+INSERT INTO employees (telegram_id, full_name, position, rank, shift, contacts, is_ready) VALUES
+(111111, 'Водилов Водила Водилович', 'Водитель', 'Сержант', '1', '+79111111111', 0),
+(222222, 'Пожаров Огонь Пожарович', 'Пожарный', 'Рядовой', '1', '+79222222222', 1),
+(333333, 'Шлангов Шланг Шлангович', 'Пожарный', 'Рядовой', '2', '+79333333333', 0),
+(444444, 'Приёмова Заявка Диспетчеровна', 'Диспетчер', 'Лейтенант', '1', '+79444444444', 0),
+(555555, 'Караулов Начал Караулович', 'Начальник караула', 'Капитан', '1', '+79555555555', 0);
+
+-- 2. Техника (Vehicles)
+INSERT INTO vehicles (number_plate, model, fuel_rate, status, last_check) VALUES
+('А111АА77', 'АЦ 5.0-40 (КАМАЗ-43253)', 28.5, 'available', datetime('now', '-10 days')),
+('В222ВВ77', 'АЦ 3.2-40 (ГАЗ-33086)', 25.0, 'available', datetime('now', '-5 days')),
+('С333СС77', 'АЛ-30 (ЗИЛ-131)', 40.0, 'in_use', datetime('now', '-1 day'));
+
+-- 3. Снаряжение (Equipment)
+-- Убедимся, что current_holder_id ссылается на СУЩЕСТВУЮЩИЙ Employee.id (1-5)
+INSERT INTO equipment (name, type, inventory_number, service_life, status, current_holder_id) VALUES
+('Дыхательный аппарат ПТС "Базис" #1', 'СИЗОД', 'СИЗОД-001', '2028-01-01', 'available', NULL),
+('Каска пожарного ШКПС #1', 'Каска', 'КАС-001', NULL, 'in_use', 2), -- Ссылается на Employee ID=2
+('Фонарь ФОС-3 #1', 'Фонарь', 'ФОН-001', NULL, 'available', NULL),
+('Боевая одежда пожарного (БОП-1) #1', 'БОП', 'БОП-001', '5 лет', 'maintenance', NULL);
+
+-- 4. Путевые листы (Trip Sheets)
+-- Убедимся, что driver_id ссылается на СУЩЕСТВУЮЩИЙ Employee.id ИЛИ telegram_id (в зависимости от модели)
+-- Используем Employee ID=1
+INSERT INTO trip_sheets (driver_id, vehicle_id, date, destination, mileage, fuel_consumption, status) VALUES
+(1, 1, datetime('now', '-2 days'), 'ул. Ленина, 10', 150.5, 45.0, 'completed'),
+(1, 2, datetime('now', '-1 day'), 'ул. Мира, 25', 85.2, 22.1, 'completed');
+
+-- 5. Журнал снаряжения (Equipment Logs)
+-- Убедимся, что employee_id и equipment_id существуют
+INSERT INTO equipment_logs (employee_id, equipment_id, action, timestamp, notes) VALUES
+(2, 2, 'taken', datetime('now', '-8 hours'), 'Взял каску на смену'), -- Employee=2, Equipment=2
+(3, 1, 'checked', datetime('now', '-1 hours'), 'Проверил аппарат перед сменой'); -- Employee=3, Equipment=1
+
+-- 6. Выезды (Dispatch Orders)
+-- Убедимся, что dispatcher_id и commander_id существуют
+INSERT INTO dispatch_orders (dispatcher_id, address, reason, creation_time, status, commander_id, approval_time, completion_time, notes, assigned_personnel_ids, assigned_vehicle_ids) VALUES
+(4, 'пр. Победы, 50, кв. 15', 'Задымление в подъезде', datetime('now', '-1 day'), 'completed', 5, datetime('now', '-23 hours'), datetime('now', '-22 hours'), 'Ложный вызов, КЗ в щитке', '["Пожаров О.П.", "Шлангов Ш.Ш."]', '["А111АА77"]'), -- Dispatcher=4, Commander=5
+(4, 'ул. Строителей, 12', 'ДТП с зажатием', datetime('now', '-2 hours'), 'approved', 5, datetime('now', '-1 hour 50 minutes'), NULL, 'Требуется ГАСИ', '["Пожаров О.П."]', '["В222ВВ77"]'), -- Dispatcher=4, Commander=5
+(4, 'Шоссе Энтузиастов, 1', 'Пожар в квартире', datetime('now', '-30 minutes'), 'pending_approval', NULL, NULL, NULL, 'Горит балкон на 5 этаже', '["Пожаров О.П.", "Шлангов Ш.Ш."]', '["А111АА77", "В222ВВ77"]'), -- Dispatcher=4
+(4, 'ул. Садовая, 5', 'Кошка на дереве', datetime('now', '-5 hours'), 'rejected', 5, datetime('now', '-4 hours 55 minutes'), NULL, 'Передано в службу спасения', '[]', '[]'); -- Dispatcher=4, Commander=5
+
+COMMIT; -- Завершаем транзакцию
+
+-- Включаем проверку внешних ключей обратно
+PRAGMA foreign_keys = ON;
